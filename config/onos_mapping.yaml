@@ -1,0 +1,15 @@
+# Maps the OpenFlow device IDs that ONOS discovers (from the Mininet mesh)
+# onto KMS city domains. The DPIDs here MUST match those set in
+# mininet/ring_topology.py.
+devices:
+  "of:0000000000000001": {id: milano,    label: "Milano KMS"}
+  "of:0000000000000002": {id: torino,    label: "Torino KMS"}
+  "of:0000000000000003": {id: genova,    label: "Genova KMS"}
+  "of:0000000000000004": {id: venezia,   label: "Venezia KMS"}
+  "of:0000000000000005": {id: bologna,   label: "Bologna KMS"}
+  "of:0000000000000006": {id: parma,     label: "Parma KMS"}
+  "of:0000000000000007": {id: la_spezia, label: "La Spezia KMS"}
+  "of:0000000000000008": {id: padova,    label: "Padova KMS"}
+  "of:0000000000000009": {id: pavia,     label: "Pavia KMS"}
+  "of:000000000000000a": {id: ferrara,   label: "Ferrara KMS"}
+  "of:000000000000000b": {id: verona,    label: "Verona KMS"}

@@ -1,0 +1,552 @@
+# QSDN Southbound Adapter — full stack with the ONOS/Mininet upper layer.
+#
+#   Mininet (ring) --OpenFlow--> ONOS  ====discovers topology====\
+#                                                                 v
+#   ONOS REST client -> Northbound API Gateway -> ... internal chain ...
+#                          Key Orchestration Manager -> 5..8 simulated KMS
+#
+# The Topology Manager runs with TOPOLOGY_SOURCE=onos: it pulls devices+links
+# from ONOS and maps them to KMS cities via config/onos_mapping.yaml.
+#
+# Start:  docker compose up --build
+# Then:   ./scripts/onos_activate_apps.sh         (enable OpenFlow apps)
+#         docker exec -it mininet-c python ring_topology.py   (build the ring)
+
+services:
+
+  # ---- Upper layer: SDN controller + emulated network ----
+  # These run only with the "sdn" profile: `docker compose --profile sdn up`.
+  # On macOS the SDN layer lives in a Linux VM instead (Mininet needs a real
+  # OVS datapath), and the adapter points at it via ONOS_BASE_URL.
+  onos:
+    image: onosproject/onos            # pin e.g. onosproject/onos:2.7.0 for reproducibility
+    platform: linux/amd64              # ONOS ships amd64 only; runs emulated on Apple Silicon
+    container_name: onos-c
+    profiles: ["sdn"]
+    environment:
+      ONOS_APPS: "drivers,openflow,fwd,gui2"
+    ports: ["8181:8181", "8101:8101", "6653:6653", "5005:5005"]
+
+  mininet:
+    image: iwaseyusuke/mininet
+    platform: linux/amd64
+    container_name: mininet-c
+    profiles: ["sdn"]
+    tty: true
+    privileged: true
+    volumes:
+      - ./mininet/ring_topology.py:/root/ring_topology.py
+      - /lib/modules:/lib/modules
+    depends_on: [onos]
+
+  # ---- Horizontal audit log ----
+  audit-log:
+    build: {context: ., dockerfile: services/audit_log/Dockerfile}
+    image: qsdn-audit-log
+    environment: {SERVICE_NAME: audit_log}
+    volumes: ["audit-data:/app/data"]
+    ports: ["8086:8086"]
+
+  # ---- Web dashboard (presentation layer; proxies the adapter REST APIs) ----
+  dashboard:
+    build: {context: ., dockerfile: services/dashboard/Dockerfile}
+    image: qsdn-dashboard
+    environment:
+      GATEWAY_URL: http://northbound-api-gateway:8080
+      TOPOLOGY_URL: http://topology-manager:8082
+      AUDIT_URL: http://audit-log:8086
+      KMS_REGISTRY: /app/config/kms_registry.yaml
+    volumes:
+      - "./config:/app/config:ro"
+      - "./services/dashboard/app:/app/app:ro"
+    ports: ["8090:8090"]
+    depends_on: [northbound-api-gateway, topology-manager, audit-log]
+
+  # ---- QKD Southbound Adapter (6 microservices) ----
+  northbound-api-gateway:
+    build: {context: ., dockerfile: services/northbound_api_gateway/Dockerfile}
+    image: qsdn-northbound-api-gateway
+    environment: {SERVICE_NAME: northbound_api_gateway}
+    ports: ["8080:8080"]
+    depends_on: [identity-auth, audit-log]
+
+  identity-auth:
+    build: {context: ., dockerfile: services/identity_auth/Dockerfile}
+    image: qsdn-identity-auth
+    environment: {SERVICE_NAME: identity_auth}
+    volumes: ["./config:/app/config:ro"]
+    depends_on: [topology-manager, audit-log]
+
+  topology-manager:
+    build: {context: ., dockerfile: services/topology_manager/Dockerfile}
+    image: qsdn-topology-manager
+    environment:
+      SERVICE_NAME: topology_manager
+      # static = topologia dal file YAML (default, per la demo).
+      # onos   = topologia scoperta da ONOS (su hardware x86: export TOPOLOGY_SOURCE=onos)
+      TOPOLOGY_SOURCE: ${TOPOLOGY_SOURCE:-static}
+      # On macOS ONOS runs in a Linux VM: set ONOS_BASE_URL=http://<VM_IP>:8181
+      ONOS_BASE_URL: ${ONOS_BASE_URL:-http://onos:8181}
+      ONOS_USER: onos
+      ONOS_PASSWORD: rocks
+      ONOS_MAPPING: /app/config/onos_mapping.yaml
+    volumes: ["./config:/app/config:ro"]
+    ports: ["8082:8082"]
+    depends_on: [path-computation-engine, audit-log]
+
+  path-computation-engine:
+    build: {context: ., dockerfile: services/path_computation_engine/Dockerfile}
+    image: qsdn-path-computation-engine
+    environment: {SERVICE_NAME: path_computation_engine}
+    depends_on: [key-orchestration-manager, audit-log]
+
+  key-orchestration-manager:
+    build: {context: ., dockerfile: services/key_orchestration_manager/Dockerfile}
+    image: qsdn-key-orchestration-manager
+    environment:
+      SERVICE_NAME: key_orchestration_manager
+      # switch to the hybrid registry for the real Next Door pair:
+      #   KMS_REGISTRY=/app/config/kms_registry.ndks.yaml
+      KMS_REGISTRY: ${KMS_REGISTRY:-/app/config/kms_registry.yaml}
+    volumes:
+      - "./config:/app/config:ro"
+      - "./ndks/certs:/app/certs:ro"     # SAE client certs for ndks backends
+    depends_on: [service-provisioning, audit-log]
+
+  service-provisioning:
+    build: {context: ., dockerfile: services/service_provisioning/Dockerfile}
+    image: qsdn-service-provisioning
+    environment: {SERVICE_NAME: service_provisioning}
+    depends_on: [audit-log]
+
+  # ---- Lower layer: simulated KMS (ETSI GS QKD 014), one per city ----
+  # Every KMS has its own build block (same image) so Compose builds them
+  # locally instead of trying to pull qsdn-kms-mock from a registry.
+  kms-milano:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: milano, SAE_ID: milano-sae, PORT: "9001"}
+    ports: ["9001:9001"]
+  kms-torino:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: torino, SAE_ID: torino-sae, PORT: "9002"}
+    ports: ["9002:9002"]
+  kms-genova:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: genova, SAE_ID: genova-sae, PORT: "9003"}
+    ports: ["9003:9003"]
+  kms-venezia:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: venezia, SAE_ID: venezia-sae, PORT: "9004"}
+    ports: ["9004:9004"]
+  kms-bologna:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: bologna, SAE_ID: bologna-sae, PORT: "9005"}
+    ports: ["9005:9005"]
+  kms-firenze:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: firenze, SAE_ID: firenze-sae, PORT: "9006"}
+    ports: ["9006:9006"]
+  kms-roma:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: roma, SAE_ID: roma-sae, PORT: "9007"}
+    ports: ["9007:9007"]
+  kms-napoli:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: napoli, SAE_ID: napoli-sae, PORT: "9008"}
+    ports: ["9008:9008"]
+
+  # Trusted relay nodes, added to satisfy QKD fibre-distance constraints
+  # between the 5 main cities (see config/topology.yaml).
+  kms-parma:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: parma, SAE_ID: parma-sae, PORT: "9009"}
+    ports: ["9009:9009"]
+  kms-la_spezia:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: la_spezia, SAE_ID: la_spezia-sae, PORT: "9010"}
+    ports: ["9010:9010"]
+  kms-padova:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: padova, SAE_ID: padova-sae, PORT: "9011"}
+    ports: ["9011:9011"]
+
+  # Densification: Pavia/Ferrara trusted relays + Verona main KMS.
+  kms-pavia:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: pavia, SAE_ID: pavia-sae, PORT: "9012"}
+    ports: ["9012:9012"]
+  kms-ferrara:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: ferrara, SAE_ID: ferrara-sae, PORT: "9013"}
+    ports: ["9013:9013"]
+  kms-verona:
+    build: {context: ., dockerfile: services/kms_mock/Dockerfile}
+    image: qsdn-kms-mock
+    environment: {CITY: verona, SAE_ID: verona-sae, PORT: "9014"}
+    ports: ["9014:9014"]
+
+  # ---- Real ETSI 014 KMEs (Next Door, PATCHED for full mesh), profile "ndks" ----
+  # All 14 nodes (9 main KMS + 5 trusted relay: parma/la_spezia/padova/pavia/ferrara) are real
+  # KMEs in FULL MESH: any pair exchanges real keys, relays included.
+  # The image is built from ndks/ (upstream + scanner/broadcaster patch).
+  # Start with:  ./ndks/generate_certs.sh
+  #   KMS_REGISTRY=/app/config/kms_registry.ndks.yaml docker compose --profile ndks up -d --build
+  kme-milano:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-milano
+    profiles: ["ndks"]
+    environment:
+      PORT: "8011"
+      KME_ID: "10000000-0000-0000-0000-000000000001"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000001"
+      OTHER_KMES: "https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-milano.crt.pem
+      KME_KEY: /certs/kme-milano.key.pem
+      SAE_CERT: /certs/sae-milano.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8011:8011"]
+
+  kme-torino:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-torino
+    profiles: ["ndks"]
+    environment:
+      PORT: "8012"
+      KME_ID: "10000000-0000-0000-0000-000000000002"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000002"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-torino.crt.pem
+      KME_KEY: /certs/kme-torino.key.pem
+      SAE_CERT: /certs/sae-torino.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8012:8012"]
+
+  kme-genova:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-genova
+    profiles: ["ndks"]
+    environment:
+      PORT: "8013"
+      KME_ID: "10000000-0000-0000-0000-000000000003"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000003"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-genova.crt.pem
+      KME_KEY: /certs/kme-genova.key.pem
+      SAE_CERT: /certs/sae-genova.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8013:8013"]
+
+  kme-venezia:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-venezia
+    profiles: ["ndks"]
+    environment:
+      PORT: "8014"
+      KME_ID: "10000000-0000-0000-0000-000000000004"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000004"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-venezia.crt.pem
+      KME_KEY: /certs/kme-venezia.key.pem
+      SAE_CERT: /certs/sae-venezia.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8014:8014"]
+
+  kme-bologna:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-bologna
+    profiles: ["ndks"]
+    environment:
+      PORT: "8015"
+      KME_ID: "10000000-0000-0000-0000-000000000005"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000005"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-bologna.crt.pem
+      KME_KEY: /certs/kme-bologna.key.pem
+      SAE_CERT: /certs/sae-bologna.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8015:8015"]
+
+  kme-firenze:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-firenze
+    profiles: ["ndks"]
+    environment:
+      PORT: "8016"
+      KME_ID: "10000000-0000-0000-0000-000000000006"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000006"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-firenze.crt.pem
+      KME_KEY: /certs/kme-firenze.key.pem
+      SAE_CERT: /certs/sae-firenze.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8016:8016"]
+
+  kme-roma:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-roma
+    profiles: ["ndks"]
+    environment:
+      PORT: "8017"
+      KME_ID: "10000000-0000-0000-0000-000000000007"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000007"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-roma.crt.pem
+      KME_KEY: /certs/kme-roma.key.pem
+      SAE_CERT: /certs/sae-roma.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8017:8017"]
+
+  kme-napoli:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-napoli
+    profiles: ["ndks"]
+    environment:
+      PORT: "8018"
+      KME_ID: "10000000-0000-0000-0000-000000000008"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000008"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-napoli.crt.pem
+      KME_KEY: /certs/kme-napoli.key.pem
+      SAE_CERT: /certs/sae-napoli.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8018:8018"]
+
+  # ---- Trusted relay nodes as real Next Door KMEs (full mesh) ----
+  kme-parma:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-parma
+    profiles: ["ndks"]
+    environment:
+      PORT: "8019"
+      KME_ID: "10000000-0000-0000-0000-000000000009"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000009"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-parma.crt.pem
+      KME_KEY: /certs/kme-parma.key.pem
+      SAE_CERT: /certs/sae-parma.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8019:8019"]
+
+  kme-la_spezia:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-la_spezia
+    profiles: ["ndks"]
+    environment:
+      PORT: "8020"
+      KME_ID: "10000000-0000-0000-0000-000000000010"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000010"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-la_spezia.crt.pem
+      KME_KEY: /certs/kme-la_spezia.key.pem
+      SAE_CERT: /certs/sae-la_spezia.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8020:8020"]
+
+  kme-padova:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-padova
+    profiles: ["ndks"]
+    environment:
+      PORT: "8021"
+      KME_ID: "10000000-0000-0000-0000-000000000011"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000011"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-pavia:8022,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-padova.crt.pem
+      KME_KEY: /certs/kme-padova.key.pem
+      SAE_CERT: /certs/sae-padova.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8021:8021"]
+
+  # ---- Densification KMEs: Pavia/Ferrara relays + Verona main (full mesh) ----
+
+  kme-pavia:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-pavia
+    profiles: ["ndks"]
+    environment:
+      PORT: "8022"
+      KME_ID: "10000000-0000-0000-0000-000000000012"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000012"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-ferrara:8023,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-pavia.crt.pem
+      KME_KEY: /certs/kme-pavia.key.pem
+      SAE_CERT: /certs/sae-pavia.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8022:8022"]
+
+  kme-ferrara:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-ferrara
+    profiles: ["ndks"]
+    environment:
+      PORT: "8023"
+      KME_ID: "10000000-0000-0000-0000-000000000013"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000013"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-verona:8024"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-ferrara.crt.pem
+      KME_KEY: /certs/kme-ferrara.key.pem
+      SAE_CERT: /certs/sae-ferrara.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8023:8023"]
+
+  kme-verona:
+    build: {context: ./ndks}
+    image: qsdn-ndks-patched-verona
+    profiles: ["ndks"]
+    environment:
+      PORT: "8024"
+      KME_ID: "10000000-0000-0000-0000-000000000014"
+      ATTACHED_SAE_ID: "5ae00000-0000-0000-0000-000000000014"
+      OTHER_KMES: "https://kme-milano:8011,https://kme-torino:8012,https://kme-genova:8013,https://kme-venezia:8014,https://kme-bologna:8015,https://kme-firenze:8016,https://kme-roma:8017,https://kme-napoli:8018,https://kme-parma:8019,https://kme-la_spezia:8020,https://kme-padova:8021,https://kme-pavia:8022,https://kme-ferrara:8023"
+      DEFAULT_KEY_SIZE: "32"
+      MAX_KEY_COUNT: "100000"
+      MAX_KEYS_PER_REQUEST: "128"
+      MAX_KEY_SIZE: "1024"
+      MIN_KEY_SIZE: "32"
+      KEY_GEN_SEC_TO_GEN: "2"
+      SCANNER_TIMEOUT: "5"
+      BROADCAST_TIMEOUT: "5"
+      CA_FILE: /certs/ca.crt.pem
+      KME_CERT: /certs/kme-verona.crt.pem
+      KME_KEY: /certs/kme-verona.key.pem
+      SAE_CERT: /certs/sae-verona.crt.pem
+    volumes: ["./ndks/certs:/certs:ro"]
+    ports: ["8024:8024"]
+
+
+volumes:
+  audit-data:
+
+# No custom network: all services share Compose's default network and reach
+# each other by service name (e.g. http://onos:8181). Mininet finds ONOS via
+# the hostname "onos" (see mininet/ring_topology.py), so no static IPs / subnet.

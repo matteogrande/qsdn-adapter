@@ -1,0 +1,62 @@
+# QKD/KMS topology — MESH of 11 cities with 5 TRUSTED RELAY nodes
+# (Parma, La Spezia, Padova, Pavia, Ferrara) + Verona as an extra main KMS.
+#
+# The original 5-node ring (Milano-Torino-Genova-Venezia-Bologna) put direct
+# QKD links between city pairs that exceed the practical distance limit for
+# fibre-based QKD without a trusted relay in between. Parma, La Spezia and
+# Padova are added as trusted relay nodes so every physical link respects
+# the distance constraint:
+#
+#   Milano - Torino - Genova - La Spezia - Parma - (back to Milano)   <- ring
+#   Parma - Bologna                                                  <- spur
+#   Parma - Padova - Venezia                                         <- spur
+#
+# This file is the STATIC source (used for tests and no-docker dev). With
+# the Docker stack the Topology Manager runs with TOPOLOGY_SOURCE=onos and
+# rebuilds this same mesh from the topology ONOS discovers in Mininet.
+#
+# Parma is the hub: it sits on the west ring AND relays both the Bologna and
+# the Padova/Venezia spurs, so Milano<->Venezia has two routes (via Torino/
+# Genova/La Spezia or directly via Parma), while Bologna and Venezia are each
+# reachable only through Parma (single trusted-relay hop from the hub).
+
+nodes:
+  - {id: milano,     label: "Milano KMS"}
+  - {id: torino,      label: "Torino KMS"}
+  - {id: genova,      label: "Genova KMS"}
+  - {id: venezia,     label: "Venezia KMS"}
+  - {id: bologna,     label: "Bologna KMS"}
+  - {id: parma,       label: "Parma KMS"}
+  - {id: la_spezia,   label: "La Spezia KMS"}
+  - {id: padova,      label: "Padova KMS"}
+  # Densification: Pavia/Ferrara trusted relays + Verona main KMS, adding
+  # redundant west/east corridors so the PCE has real alternatives to reroute on.
+  - {id: pavia,       label: "Pavia KMS"}
+  - {id: ferrara,     label: "Ferrara KMS"}
+  - {id: verona,      label: "Verona KMS"}
+
+links:
+  - {source: milano,    target: torino,    cost: 1, type: physical, status: up}
+  - {source: torino,    target: genova,    cost: 1, type: physical, status: up}
+  - {source: genova,    target: la_spezia, cost: 1, type: physical, status: up}
+  - {source: la_spezia, target: parma,     cost: 1, type: physical, status: up}
+  - {source: milano,    target: parma,     cost: 1, type: physical, status: up}
+  - {source: parma,     target: bologna,   cost: 1, type: physical, status: up}
+  - {source: parma,     target: padova,    cost: 1, type: physical, status: up}
+  - {source: padova,    target: venezia,   cost: 1, type: physical, status: up}
+  # Pavia relay — west redundancy (alternative to the direct Milano-Parma hop).
+  - {source: milano,    target: pavia,     cost: 1, type: physical, status: up}
+  - {source: pavia,     target: genova,    cost: 1, type: physical, status: up}
+  - {source: pavia,     target: parma,     cost: 1, type: physical, status: up}
+  # Ferrara relay — east redundancy (second corridor towards Venezia).
+  - {source: bologna,   target: ferrara,   cost: 1, type: physical, status: up}
+  - {source: ferrara,   target: padova,    cost: 1, type: physical, status: up}
+  - {source: ferrara,   target: venezia,   cost: 1, type: physical, status: up}
+  # Verona main KMS — dense north-east mesh on the approach to Venezia.
+  - {source: verona,    target: padova,    cost: 1, type: physical, status: up}
+  - {source: verona,    target: ferrara,   cost: 1, type: physical, status: up}
+  - {source: verona,    target: venezia,   cost: 1, type: physical, status: up}
+
+# Pure physical mesh for now — no virtual/VPN chords. (Add them here later as
+# {type: vpn} overlay links when you want to "have fun changing it".)
+virtual_links: []

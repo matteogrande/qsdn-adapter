@@ -1,0 +1,19 @@
+# Directory of logical KMS domains (id -> label). Identity & Auth resolves the
+# endpoints requested by ONOS onto these domains. Kept separate from
+# kms_registry.yaml so endpoint resolution stays decoupled from KMS transport
+# (only the Key Orchestration Manager talks to the actual KMS).
+domains:
+  milano:    "Milano KMS"
+  torino:    "Torino KMS"
+  genova:    "Genova KMS"
+  venezia:   "Venezia KMS"
+  bologna:   "Bologna KMS"
+  parma:     "Parma KMS"
+  la_spezia: "La Spezia KMS"
+  padova:    "Padova KMS"
+  firenze:   "Firenze KMS"
+  roma:      "Roma KMS"
+  napoli:    "Napoli KMS"
+  pavia:     "Pavia KMS"
+  ferrara:   "Ferrara KMS"
+  verona:    "Verona KMS"

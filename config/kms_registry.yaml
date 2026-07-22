@@ -1,0 +1,21 @@
+# KMS registry. Each city declares a `backend`:
+#   mock -> kms_mock container (plain HTTP GET, simulated keys)   [default]
+#   ndks -> real Next Door KME (HTTPS + mutual-TLS + POST)        [see kms_registry.ndks.yaml]
+kms:
+  milano:  {label: "Milano KMS",  backend: mock, base_url: "http://kms-milano:9001",  sae_id: "milano-sae"}
+  torino:  {label: "Torino KMS",  backend: mock, base_url: "http://kms-torino:9002",  sae_id: "torino-sae"}
+  genova:  {label: "Genova KMS",  backend: mock, base_url: "http://kms-genova:9003",  sae_id: "genova-sae"}
+  venezia: {label: "Venezia KMS", backend: mock, base_url: "http://kms-venezia:9004", sae_id: "venezia-sae"}
+  bologna: {label: "Bologna KMS", backend: mock, base_url: "http://kms-bologna:9005", sae_id: "bologna-sae"}
+  firenze: {label: "Firenze KMS", backend: mock, base_url: "http://kms-firenze:9006", sae_id: "firenze-sae"}
+  roma:    {label: "Roma KMS",    backend: mock, base_url: "http://kms-roma:9007",    sae_id: "roma-sae"}
+  napoli:  {label: "Napoli KMS",  backend: mock, base_url: "http://kms-napoli:9008",  sae_id: "napoli-sae"}
+  # Trusted relay nodes added to satisfy QKD fibre-distance constraints
+  # between the 5 main cities (see config/topology.yaml).
+  parma:     {label: "Parma KMS",     backend: mock, base_url: "http://kms-parma:9009",     sae_id: "parma-sae"}
+  la_spezia: {label: "La Spezia KMS", backend: mock, base_url: "http://kms-la_spezia:9010", sae_id: "la_spezia-sae"}
+  padova:    {label: "Padova KMS",    backend: mock, base_url: "http://kms-padova:9011",    sae_id: "padova-sae"}
+  # Densification: Pavia/Ferrara trusted relays + Verona main KMS.
+  pavia:     {label: "Pavia KMS",     backend: mock, base_url: "http://kms-pavia:9012",     sae_id: "pavia-sae"}
+  ferrara:   {label: "Ferrara KMS",   backend: mock, base_url: "http://kms-ferrara:9013",   sae_id: "ferrara-sae"}
+  verona:    {label: "Verona KMS",    backend: mock, base_url: "http://kms-verona:9014",    sae_id: "verona-sae"}

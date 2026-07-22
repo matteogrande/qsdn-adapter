@@ -1,0 +1,105 @@
+# FULL-MESH real backend: ALL cities are Next Door KMEs (patched image,
+# see ndks/). Any pair of endpoints exchanges REAL keys via ETSI 014 + mTLS.
+# Use with:  ./ndks/generate_certs.sh
+#   KMS_REGISTRY=/app/config/kms_registry.ndks.yaml docker compose --profile ndks up -d --build
+kms:
+  milano:
+    label: "Milano KMS"
+    backend: ndks
+    base_url: "https://kme-milano:8011"
+    sae_id: "5ae00000-0000-0000-0000-000000000001"
+    sae_cert: "/app/certs/sae-milano.crt.pem"
+    sae_key:  "/app/certs/sae-milano.key.pem"
+  torino:
+    label: "Torino KMS"
+    backend: ndks
+    base_url: "https://kme-torino:8012"
+    sae_id: "5ae00000-0000-0000-0000-000000000002"
+    sae_cert: "/app/certs/sae-torino.crt.pem"
+    sae_key:  "/app/certs/sae-torino.key.pem"
+  genova:
+    label: "Genova KMS"
+    backend: ndks
+    base_url: "https://kme-genova:8013"
+    sae_id: "5ae00000-0000-0000-0000-000000000003"
+    sae_cert: "/app/certs/sae-genova.crt.pem"
+    sae_key:  "/app/certs/sae-genova.key.pem"
+  venezia:
+    label: "Venezia KMS"
+    backend: ndks
+    base_url: "https://kme-venezia:8014"
+    sae_id: "5ae00000-0000-0000-0000-000000000004"
+    sae_cert: "/app/certs/sae-venezia.crt.pem"
+    sae_key:  "/app/certs/sae-venezia.key.pem"
+  bologna:
+    label: "Bologna KMS"
+    backend: ndks
+    base_url: "https://kme-bologna:8015"
+    sae_id: "5ae00000-0000-0000-0000-000000000005"
+    sae_cert: "/app/certs/sae-bologna.crt.pem"
+    sae_key:  "/app/certs/sae-bologna.key.pem"
+  firenze:
+    label: "Firenze KMS"
+    backend: ndks
+    base_url: "https://kme-firenze:8016"
+    sae_id: "5ae00000-0000-0000-0000-000000000006"
+    sae_cert: "/app/certs/sae-firenze.crt.pem"
+    sae_key:  "/app/certs/sae-firenze.key.pem"
+  roma:
+    label: "Roma KMS"
+    backend: ndks
+    base_url: "https://kme-roma:8017"
+    sae_id: "5ae00000-0000-0000-0000-000000000007"
+    sae_cert: "/app/certs/sae-roma.crt.pem"
+    sae_key:  "/app/certs/sae-roma.key.pem"
+  napoli:
+    label: "Napoli KMS"
+    backend: ndks
+    base_url: "https://kme-napoli:8018"
+    sae_id: "5ae00000-0000-0000-0000-000000000008"
+    sae_cert: "/app/certs/sae-napoli.crt.pem"
+    sae_key:  "/app/certs/sae-napoli.key.pem"
+  # ---- Trusted relay nodes (also real Next Door KMEs) ----
+  parma:
+    label: "Parma KMS"
+    backend: ndks
+    base_url: "https://kme-parma:8019"
+    sae_id: "5ae00000-0000-0000-0000-000000000009"
+    sae_cert: "/app/certs/sae-parma.crt.pem"
+    sae_key:  "/app/certs/sae-parma.key.pem"
+  la_spezia:
+    label: "La Spezia KMS"
+    backend: ndks
+    base_url: "https://kme-la_spezia:8020"
+    sae_id: "5ae00000-0000-0000-0000-000000000010"
+    sae_cert: "/app/certs/sae-la_spezia.crt.pem"
+    sae_key:  "/app/certs/sae-la_spezia.key.pem"
+  padova:
+    label: "Padova KMS"
+    backend: ndks
+    base_url: "https://kme-padova:8021"
+    sae_id: "5ae00000-0000-0000-0000-000000000011"
+    sae_cert: "/app/certs/sae-padova.crt.pem"
+    sae_key:  "/app/certs/sae-padova.key.pem"
+  # ---- Densification: Pavia/Ferrara relays + Verona main (also real KMEs) ----
+  pavia:
+    label: "Pavia KMS"
+    backend: ndks
+    base_url: "https://kme-pavia:8022"
+    sae_id: "5ae00000-0000-0000-0000-000000000012"
+    sae_cert: "/app/certs/sae-pavia.crt.pem"
+    sae_key:  "/app/certs/sae-pavia.key.pem"
+  ferrara:
+    label: "Ferrara KMS"
+    backend: ndks
+    base_url: "https://kme-ferrara:8023"
+    sae_id: "5ae00000-0000-0000-0000-000000000013"
+    sae_cert: "/app/certs/sae-ferrara.crt.pem"
+    sae_key:  "/app/certs/sae-ferrara.key.pem"
+  verona:
+    label: "Verona KMS"
+    backend: ndks
+    base_url: "https://kme-verona:8024"
+    sae_id: "5ae00000-0000-0000-0000-000000000014"
+    sae_cert: "/app/certs/sae-verona.crt.pem"
+    sae_key:  "/app/certs/sae-verona.key.pem"

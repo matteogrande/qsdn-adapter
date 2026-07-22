@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QSDN Adapter Live Demo</title>
+<link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div class="hero-main">
+        <div class="eyebrow">QSDN Control Panel</div>
+        <h1>QSDN Adapter Live Demo</h1>
+        <p class="hero-lead">Orchestrazione QKD end-to-end: richiesta ONOS, path computation, coordinamento KMS, provisioning e risposta ETSI GS QKD 014.</p>
+        <div class="hero-meta">
+          <span class="meta-chip flow-chip"><strong>Flow</strong> ONOS → Gateway → Auth → Topology → PCE → KOM → Provisioning → ONOS</span>
+        </div>
+      </div>
+      <div class="hero-side">
+        <button id="presentationToggle" class="mode-btn" type="button" aria-pressed="false">
+          <span class="mode-dot"></span><span class="mode-label">Modalità Presentazione</span>
+        </button>
+        <div id="statusBadges" class="status-strip" aria-label="Stato del sistema"></div>
+      </div>
+    </header>
+
+    <section id="kpiGrid" class="kpi-grid" aria-label="Indicatori KPI"></section>
+
+    <section class="panel scenarios-panel full-row">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Scenari demo</h2>
+          <p class="section-subtitle">Sequenze one-click che raccontano il comportamento end-to-end dell'adapter. I controlli manuali restano disponibili in “Advanced controls”.</p>
+        </div>
+        <div class="helper">one-click</div>
+      </div>
+      <div class="panel-body">
+        <div class="scenario-cards">
+          <button class="scenario-card s1" data-scenario="scenario-1" type="button">
+            <span class="sc-icon">▶</span>
+            <span class="sc-body">
+              <span class="sc-title">Scenario 1 — Provisioning normale</span>
+              <span class="sc-desc">Milano → Venezia · key size 256 · lowest cost. Pipeline, path, orchestrazione KMS, circuito attivo e risposta 200 OK.</span>
+            </span>
+          </button>
+          <button class="scenario-card s2" data-scenario="scenario-2" type="button">
+            <span class="sc-icon">⚡</span>
+            <span class="sc-body">
+              <span class="sc-title">Scenario 2 — Guasto e rerouting</span>
+              <span class="sc-desc">Un link del percorso attivo va down: ricalcolo, confronto old/new path e circuito ACTIVE · REROUTED.</span>
+            </span>
+          </button>
+          <button class="scenario-card s3" data-scenario="scenario-3" type="button">
+            <span class="sc-icon">⚠</span>
+            <span class="sc-body">
+              <span class="sc-title">Scenario 3 — Key pool insufficiente</span>
+              <span class="sc-desc">Il key pool di un KMS sul percorso si esaurisce: il nodo va in WARNING e il PCE calcola un percorso alternativo.</span>
+            </span>
+          </button>
+        </div>
+        <span id="scenarioRunFeedback" class="feedback scenario-run-feedback"></span>
+      </div>
+    </section>
+
+    <section class="panel arch-panel full-row">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Architettura & flusso informativo</h2>
+          <p class="section-subtitle">I tre protagonisti dell'orchestrazione QKD e il percorso logico dell'informazione. Le frecce si illuminano quando una simulazione è in corso: richiesta ONOS → QSDN Adapter → KMS e ritorno del circuito verso ONOS.</p>
+        </div>
+        <div class="helper">live flow</div>
+      </div>
+      <div class="arch-frame">
+        <svg id="archSvg" class="arch-svg" viewBox="0 0 1200 280" aria-label="Architettura e flusso QSDN"></svg>
+      </div>
+      <p id="archCaption" class="arch-caption"></p>
+    </section>
+
+    <main class="main-grid">
+      <section class="panel topology-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">Topologia QKD/KMS</h2>
+            <p class="section-subtitle">Rete QKD/KMS parzialmente magliata con trusted relay nodes intermedi. Il Topology Manager mantiene lo stato corrente e lo fornisce al Path Computation Engine. Clicca un nodo per mostrarne o nasconderne i dettagli.</p>
+          </div>
+          <div class="helper">live network view</div>
+        </div>
+        <div class="topology-frame">
+          <svg id="topologySvg" class="topology-svg" viewBox="0 0 1200 640" aria-label="Topologia QKD/KMS"></svg>
+        </div>
+        <div class="legend-row" aria-label="Legenda">
+          <span class="legend-item"><i class="legend-node main"></i> Main KMS site</span>
+          <span class="legend-item"><i class="legend-node relay"></i> Trusted relay node</span>
+          <span class="legend-item"><i class="legend-line"></i> Link QKD attivo</span>
+          <span class="legend-item"><i class="legend-line down"></i> Link non disponibile</span>
+          <span class="legend-item"><i class="legend-line path"></i> Percorso scelto dal QSDN</span>
+          <span class="legend-item"><i class="legend-line circuit"></i> Circuito virtuale attivo</span>
+          <span class="legend-item"><i class="legend-dot involved"></i> KMS coinvolto nel provisioning</span>
+        </div>
+      </section>
+
+      <aside class="stack">
+        <section class="panel request-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="section-title">Richiesta ricevuta da ONOS</h2>
+              <p class="section-subtitle">ONOS REST Client → QSDN Northbound API Gateway.</p>
+            </div>
+            <div class="helper small-mono">orchestration request</div>
+          </div>
+          <div class="panel-body">
+            <div class="request-callout"><strong>ONOS REST Client</strong> richiede un servizio QKD sicuro. Il QSDN Adapter autentica, calcola il path migliore, orchestra i KMS e restituisce la risposta al controller.</div>
+            <div class="form-grid three" style="margin-top:14px">
+              <div class="field wide">
+                <label for="reqId">Request ID</label>
+                <input id="reqId" type="text" value="onos-req-0042">
+              </div>
+              <div class="field">
+                <label for="reqSource">Sorgente</label>
+                <select id="reqSource"></select>
+              </div>
+              <div class="field">
+                <label for="reqDest">Destinazione</label>
+                <select id="reqDest"></select>
+              </div>
+              <div class="field">
+                <label for="reqKeySize">Key size</label>
+                <select id="reqKeySize">
+                  <option value="128">128</option>
+                  <option value="256" selected>256</option>
+                  <option value="512">512</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="reqKeys">Numero chiavi</label>
+                <input id="reqKeys" type="number" min="1" value="1">
+              </div>
+              <div class="field wide">
+                <label>Criterio di calcolo del percorso</label>
+                <div id="reqSla" class="static-field" data-sla="lowest_cost">
+                  <strong>lowest cost</strong> — shortest path, minimizza <span class="mono">min&nbsp;Σ&nbsp;ℓ<sub>ij</sub></span>
+                </div>
+              </div>
+            </div>
+            <div class="action-row">
+              <button id="provisionBtn">Provisiona circuito QKD</button>
+              <span id="requestFeedback" class="feedback"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel pipeline-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="section-title">Pipeline microservizi</h2>
+              <p class="section-subtitle">La catena si anima step-by-step: IDLE → RUNNING → COMPLETED / FAILED, con il tempo di esecuzione di ogni componente.</p>
+            </div>
+            <div class="helper">stato live</div>
+          </div>
+          <div class="panel-body">
+            <div id="pipelineStages" class="pipeline"></div>
+          </div>
+        </section>
+
+        <section class="panel kom-panel" id="komPanel" hidden>
+          <div class="panel-head">
+            <div>
+              <h2 class="section-title">KMS Orchestration</h2>
+              <p class="section-subtitle">Il Key Orchestration Manager coordina esattamente i KMS attraversati dal percorso scelto dal PCE.</p>
+            </div>
+            <div class="helper">KOM → KMS</div>
+          </div>
+          <div class="panel-body">
+            <div id="komNodes" class="kom-nodes"></div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <section class="panel result-panel full-row">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Risultato provisioning</h2>
+          <p class="section-subtitle">Esito dettagliato con circuito, path, KMS coinvolti, tempo e risposta inviata a ONOS.</p>
+        </div>
+        <div class="helper">output adapter</div>
+      </div>
+      <div class="panel-body">
+        <div id="resultArea" class="result-wrap">
+          <div class="empty-state">Nessuna richiesta ancora inviata.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel reroute-panel full-row" id="reroutePanel" hidden>
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Rerouting</h2>
+          <p class="section-subtitle">Confronto before / after del percorso a fronte di un evento di rete sul circuito attivo.</p>
+        </div>
+        <div class="helper">before / after</div>
+      </div>
+      <div class="panel-body">
+        <div id="rerouteArea" class="reroute-wrap"></div>
+      </div>
+    </section>
+
+    <section class="panel payload-panel full-row">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Payload API</h2>
+          <p class="section-subtitle">Payload della richiesta di orchestrazione ONOS→QSDN e riferimento alle operazioni ETSI GS QKD 014 utilizzate nell'interazione con i KMS.</p>
+        </div>
+        <div class="payload-toggle" role="group" aria-label="Vista payload">
+          <button type="button" class="pill-toggle active" data-payload-view="compact">Compact</button>
+          <button type="button" class="pill-toggle" data-payload-view="full">Full JSON</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="payload-grid">
+          <section class="payload-block">
+            <div class="head"><span>Request · ONOS → QSDN</span><span id="requestJsonMeta" class="small-mono">idle</span></div>
+            <pre id="requestJson">{}</pre>
+          </section>
+          <section class="payload-block">
+            <div class="head"><span>Response · QSDN → ONOS</span><span id="responseJsonMeta" class="small-mono">idle</span></div>
+            <pre id="responseJson">{}</pre>
+          </section>
+        </div>
+        <div class="etsi-note">
+          <span class="etsi-k">Key Management Interaction · ETSI GS QKD 014</span>
+          <span class="etsi-body">Il Key Orchestration Manager interagisce con i KMS lungo il percorso usando le operazioni ETSI 014
+            <code>GET /api/v1/keys/{SAE_ID}/enc_keys</code> e <code>GET /api/v1/keys/{SAE_ID}/dec_keys</code>.
+            La richiesta di circuito ONOS→QSDN appartiene all'orchestration layer ed è distinta da queste operazioni.</span>
+        </div>
+      </div>
+    </section>
+
+    <details class="panel advanced-panel full-row" id="advancedControls">
+      <summary>
+        <span class="adv-summary-title">Advanced controls</span>
+        <span class="adv-summary-hint">Editor topologia · guasti · key pool · reset</span>
+      </summary>
+      <div class="panel-body">
+        <div class="scenario-grid">
+          <div class="scenario-buttons">
+            <button class="soft" data-scenario="restore-links">Ripristina tutti i link</button>
+            <button class="soft" data-scenario="add-firenze">Aggiungi Firenze KMS</button>
+            <button class="danger" data-scenario="reset-demo">Reset demo</button>
+            <button class="soft" data-scenario="clear-log">Pulisci log</button>
+          </div>
+
+          <div class="editor-grid">
+            <div class="form-grid three">
+              <div class="field">
+                <label for="faultLinkSource">Guasto link · da</label>
+                <select id="faultLinkSource"></select>
+              </div>
+              <div class="field">
+                <label for="faultLinkTarget">a</label>
+                <select id="faultLinkTarget"></select>
+              </div>
+              <div class="field wide action-row" style="margin-top:0">
+                <button id="toggleLinkBtn" class="soft">Abbatti / ripristina link</button>
+                <span id="faultLinkFeedback" class="feedback"></span>
+              </div>
+            </div>
+
+            <div class="form-grid three">
+              <div class="field">
+                <label for="poolNode">Key pool · nodo</label>
+                <select id="poolNode"></select>
+              </div>
+              <div class="field">
+                <label for="poolValue">Livello %</label>
+                <input id="poolValue" type="number" min="0" max="100" step="1" value="8">
+              </div>
+              <div class="field wide action-row" style="margin-top:0">
+                <button id="setPoolBtn" class="soft">Imposta key pool</button>
+                <span id="poolFeedback" class="feedback"></span>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="field wide">
+                <label for="nodePicker">Aggiungi nodo KMS</label>
+                <select id="nodePicker"></select>
+              </div>
+              <div class="field wide action-row" style="margin-top:0">
+                <button id="addNodeBtn" class="success">Aggiungi nodo</button>
+                <span id="nodeFeedback" class="feedback"></span>
+              </div>
+            </div>
+
+            <div class="form-grid three">
+              <div class="field">
+                <label for="linkSource">Nuovo link · da</label>
+                <select id="linkSource"></select>
+              </div>
+              <div class="field">
+                <label for="linkTarget">a</label>
+                <select id="linkTarget"></select>
+              </div>
+              <div class="field">
+                <label for="linkCost">Costo</label>
+                <input id="linkCost" type="number" min="1" step="1" value="1">
+              </div>
+              <div class="field wide action-row" style="margin-top:0">
+                <button id="addLinkBtn" class="success">Aggiungi link</button>
+                <span id="linkFeedback" class="feedback"></span>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="field wide action-row" style="margin-top:0">
+                <button id="resetTopologyBtn" class="ghost">Reset topologia</button>
+                <span id="scenarioFeedback" class="feedback"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <section class="panel log-panel full-row">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Live event log</h2>
+          <p class="section-subtitle">Timeline con timestamp e categoria: ONOS, gateway, auth, topology, path, KMS, provisioning, rerouting.</p>
+        </div>
+        <button id="clearLogBtn" class="ghost">Pulisci log</button>
+      </div>
+      <div class="panel-body event-log-wrap">
+        <ol id="eventLog" class="event-log" aria-label="Timeline eventi"></ol>
+      </div>
+    </section>
+  </div>
+
+  <script defer src="/static/dashboard.js"></script>
+</body>
+</html>
