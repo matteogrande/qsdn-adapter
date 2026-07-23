@@ -461,10 +461,11 @@
       const midY = (s.y + t.y) / 2;
       const latency = computeLinkLatency(link);
       const availability = computeLinkAvailability(link, s, t);
-      // On the graph: only the essentials. Full metrics live in the tooltip;
-      // the chosen path may show a little more (cost + latency).
-      const label = hot ? `cost ${link.cost} · ${latency} ms` : `cost ${link.cost}`;
-      const tip = `${s.label} ↔ ${t.label}\nCost: ${link.cost}\nLatency: ${latency} ms\nKey availability: ${availability}%\nStatus: ${down ? "DOWN" : "ACTIVE"}`;
+      // On the graph: show the per-link latency (ms). The routing weight is the
+      // same quantity by construction (latency = cost·11 + jitter), so we label
+      // links by latency directly to avoid a separate "cost" unit on screen.
+      const label = `${latency} ms`;
+      const tip = `${s.label} ↔ ${t.label}\nLatency: ${latency} ms\nKey availability: ${availability}%\nStatus: ${down ? "DOWN" : "ACTIVE"}`;
       const overlay = hot
         ? `<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="url(#linkGlow)" stroke-width="11" opacity="0.4" filter="url(#softGlow)" />`
         : "";
