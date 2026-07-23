@@ -63,6 +63,15 @@ async def orchestrate(ctx: AdapterContext) -> AdapterContext:
     keys: list[KeyInfo] = []
     verified = False
     try:
+        # trusted-relay chain: every intermediate relay node participates in the
+        # key relay, so query each one's status along the path. This makes the
+        # orchestration cost grow with the number of hops (see KPI L(h)), exactly
+        # as a hop-by-hop trusted-relay QKD delivery does.
+        for node_id in nodes[1:-1]:
+            relay = etsi.kms_for_node(node_id)
+            if relay is not None:
+                await etsi.get_status(relay, peer_sae_id=dest_kms["sae_id"])
+
         # master (source) KMS -> fresh keys toward the slave (destination) SAE
         enc = await etsi.get_enc_keys(
             source_kms, slave_sae_id=dest_kms["sae_id"],

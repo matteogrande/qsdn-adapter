@@ -14,6 +14,21 @@ from shared.settings import get_settings
 
 logger = logging.getLogger("audit")
 
+# Reuse one keep-alive client per process instead of opening a fresh TCP
+# connection for every audit event (~8 per request). Created lazily so it binds
+# to the running event loop.
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(
+            timeout=get_settings().audit_timeout,
+            limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+        )
+    return _client
+
 
 def build_event(request_id: str, event_type: str, **fields) -> AuditEvent:
     settings = get_settings()
@@ -30,8 +45,7 @@ async def log_event(event: AuditEvent) -> None:
     settings = get_settings()
     url = f"{settings.audit_url}/audit/v1/events"
     try:
-        async with httpx.AsyncClient(timeout=settings.audit_timeout) as client:
-            await client.post(url, json=event.model_dump())
+        await _get_client().post(url, json=event.model_dump())
     except Exception as exc:  # noqa: BLE001 - audit must not break the flow
         logger.warning("audit write failed for %s/%s: %s",
                        event.request_id, event.event_type, exc)

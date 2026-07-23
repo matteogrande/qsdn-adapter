@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from shared.logging_client import audit
 from shared.models import AdapterContext, VirtualCircuitRequest, VirtualCircuitResponse
@@ -57,4 +58,11 @@ async def create_virtual_circuit(req: VirtualCircuitRequest) -> VirtualCircuitRe
         selected_path=result.response.selected_path,
         detail={"status": result.response.status},
     )
+
+    # A rejected circuit (no admissible path / insufficient key material) is not
+    # a server success: surface it to ONOS as HTTP 503 while still returning the
+    # structured body. PROVISIONED stays 200. This makes the 200-vs-503 success
+    # rate an HTTP-level signal, not just a body field.
+    if result.response.status == "REJECTED":
+        return JSONResponse(status_code=503, content=result.response.model_dump())
     return result.response

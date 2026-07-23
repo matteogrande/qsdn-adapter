@@ -1,0 +1,5 @@
+scenario,hops_nominal,cost_nominal,path_nominal,hops_fault,cost_fault,path_fault,d_hops
+Milano→Venezia,3,3.0,Milano KMS → Parma KMS → Padova KMS → Venezia KMS,4,4.0,Milano KMS → Pavia KMS → Parma KMS → Padova KMS → Venezia KMS,1
+Milano→Bologna,2,2.0,Milano KMS → Parma KMS → Bologna KMS,3,3.0,Milano KMS → Pavia KMS → Parma KMS → Bologna KMS,1
+Milano→Padova,2,2.0,Milano KMS → Parma KMS → Padova KMS,3,3.0,Milano KMS → Pavia KMS → Parma KMS → Padova KMS,1
+Torino→Bologna,3,3.0,Torino KMS → Milano KMS → Parma KMS → Bologna KMS,4,4.0,Torino KMS → Milano KMS → Pavia KMS → Parma KMS → Bologna KMS,1

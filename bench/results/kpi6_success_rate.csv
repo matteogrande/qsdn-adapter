@@ -1,0 +1,9 @@
+scenario,ok_200,err_503,success_rate
+"Percorso valido
+(Torino→Bologna)",20,0,100.0
+"Percorso valido
+(Milano→Venezia)",20,0,100.0
+"Nodo fuori topologia
+(Milano→Roma)",0,20,0.0
+"Pool sorgente esaurito
+(Milano ρ=0)",0,20,0.0

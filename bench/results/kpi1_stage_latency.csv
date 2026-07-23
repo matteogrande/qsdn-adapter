@@ -1,0 +1,4 @@
+scenario,reps,e2e_mean_ms,Identity & Auth,Topology Manager,Path Computation,Key Orchestration,Service Provisioning,Northbound Gateway
+Genova→Verona,30,72.65,9.571,6.15,6.486,36.917,7.966,5.559
+Torino→Bologna,30,57.62,7.951,5.153,5.7,28.483,5.667,4.667
+Milano→Venezia,30,55.57,7.355,4.957,5.909,27.796,5.216,4.336
