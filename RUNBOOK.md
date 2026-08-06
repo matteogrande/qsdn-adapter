@@ -280,7 +280,7 @@ sleep 25 && bash scripts/demo_onos_request.sh
 
 ## 8. VALUTAZIONE DEI KPI (i grafici per la tesi)
 
-Gli script in `bench/` pilotano la pila, leggono l'audit log e generano **7 grafici**
+Gli script in `bench/` pilotano la pila, leggono l'audit log e generano **6 grafici**
 (+ CSV) in `bench/results/`. Ogni KPI risponde a una domanda:
 
 | KPI | Domanda | File |
@@ -289,9 +289,8 @@ Gli script in `bench/` pilotano la pila, leggono l'audit log e generano **7 graf
 | 2 | La latenza cresce con gli hop? L(h) | `kpi2_hops_latency.png` |
 | 3 | Quanto costa il rerouting dopo un guasto? | `kpi3_cost_hops_scenario.png` |
 | 4 | Regge il carico? Throughput T(n) e scalabilità σ(n) | `kpi4_throughput_sigma.png` |
-| 5 | Quanto è più lento il backend reale (mTLS)? | `kpi5_mock_vs_ndks.png` |
-| 6 | Accetta i validi e rifiuta gli impossibili? (200 vs 503) | `kpi6_success_rate.png` |
-| 7 | Il pool si ricarica sotto soglia? ρ_i nel tempo | `kpi7_pool_rho.png` |
+| 5 | Accetta i validi e rifiuta gli impossibili? (200 vs 503) | `kpi5_success_rate.png` |
+| 6 | Il pool si ricarica sotto soglia? ρ_i nel tempo | `kpi6_pool_rho.png` |
 
 ### 8.1 Preparazione (una volta)
 
@@ -307,9 +306,9 @@ pip install -r bench/requirements.txt
 ### 8.2 Generare tutti i grafici in un colpo
 
 ```bash
-cd bench && python run_all.py       # KPI 1,2,3,4,6,7 + KPI 5 (lato mock)
+cd bench && python run_all.py       # KPI 1,2,3,4,5,6
 ```
-I `.png` e `.csv` finiscono in `bench/results/`. (Dura ~3-4 min: ~2000 richieste + il KPI 7 che dura 40s.)
+I `.png` e `.csv` finiscono in `bench/results/`. (Dura ~3-4 min: ~2000 richieste + il KPI 6 che dura 40s.)
 
 ### 8.3 Un KPI alla volta (opzionale)
 
@@ -319,28 +318,11 @@ python kpi1_stage_latency.py        # barra impilata dei 6 microservizi
 python kpi2_hops_latency.py         # L(h): latenza vs hop + retta di fit
 python kpi3_cost_hops_scenario.py   # hop nominale vs dopo guasto Milano-Parma
 python kpi4_throughput_sigma.py     # T(n) e sigma(n) al variare della concorrenza
-python kpi6_success_rate.py         # 200 vs 503 per scenario
-python kpi7_pool_rho.py             # rho_i(t) con pre-fetching (dente di sega)
+python kpi5_success_rate.py         # 200 vs 503 per scenario
+python kpi6_pool_rho.py             # rho_i(t) con pre-fetching (dente di sega)
 ```
 
-### 8.4 KPI 5 — confronto mock vs Next Door REALE (due passaggi)
-
-```bash
-# passaggio 1: con lo stack mock su
-cd bench && python kpi5_mock_vs_ndks.py         # -> kpi5_mock.csv
-
-# passaggio 2: avvia il backend reale, aspetta il warm-up, rimisura
-cd ..
-./ndks/generate_certs.sh                         # solo la prima volta
-KMS_REGISTRY=/app/config/kms_registry.ndks.yaml docker compose --profile ndks up -d --build
-sleep 30
-cd bench && python kpi5_mock_vs_ndks.py          # rileva ndks -> kpi5_ndks.csv + grafico di confronto
-
-# torna al mock quando hai finito
-cd .. && docker compose --profile ndks down && docker compose up -d
-```
-
-### 8.5 Pagina-report unica per la tesi
+### 8.4 Pagina-report unica per la tesi
 
 ```bash
 cd bench && python make_report.py    # -> bench/results/report.html (grafici incorporati)
@@ -350,7 +332,7 @@ Aprila nel browser e **Stampa → Salva come PDF** per la tesi:
 open bench/results/report.html       # su macOS
 ```
 
-### 8.6 Dashboard live (le schermate visive)
+### 8.5 Dashboard live (le schermate visive)
 
 Con lo stack su, apri `http://localhost:8090`: topologia, provisioning con percorso
 in oro, fallback cliccando un link, e il pannello "Scenario di simulazione" per il pool.

@@ -3,7 +3,7 @@ Build a single self-contained HTML report (bench/results/report.html) with all
 KPI charts embedded as base64 + interpretation text and the headline numbers
 pulled live from the CSVs. Open it in a browser and Print-to-PDF for the thesis.
 
-Run after the KPI suite (and after the ndks pass, so KPI 5 shows the comparison):
+Run after the KPI suite:
     cd bench && python make_report.py
 """
 from __future__ import annotations
@@ -83,23 +83,7 @@ def kpi4_facts() -> str:
 
 
 def kpi5_facts() -> str:
-    mock = rows("kpi5_mock.csv"); ndks = rows("kpi5_ndks.csv")
-    if not mock:
-        return ""
-    mm = statistics.mean(float(x["e2e_ms"]) for x in mock)
-    if not ndks:
-        return (f"Backend mock: latenza e2e ≈ <b>{mm:.0f} ms</b>. Esegui anche il "
-                f"profilo ndks per il confronto con il backend reale.")
-    nm = statistics.mean(float(x["e2e_ms"]) for x in ndks)
-    factor = nm / mm if mm else 0
-    return (f"Il backend reale Next Door è più lento: e2e ≈ <b>{nm:.0f} ms</b> vs "
-            f"<b>{mm:.0f} ms</b> del mock (×{factor:.1f}). Il costo aggiuntivo è "
-            f"l'handshake <b>mTLS</b> + i due round-trip reali fra KME: è "
-            f"l'evidenza di interoperabilità (V≥2), non un difetto.")
-
-
-def kpi6_facts() -> str:
-    r = rows("kpi6_success_rate.csv")
+    r = rows("kpi5_success_rate.csv")
     if not r:
         return ""
     ok = sum(int(x["ok_200"]) for x in r if x["err_503"] == "0")
@@ -109,8 +93,8 @@ def kpi6_facts() -> str:
             "successo separa nettamente gli scenari.")
 
 
-def kpi7_facts() -> str:
-    r = rows("kpi7_pool_rho.csv")
+def kpi6_facts() -> str:
+    r = rows("kpi6_pool_rho.csv")
     if not r:
         return ""
     rhos = [float(x["rho"]) for x in r]
@@ -131,12 +115,10 @@ KPIS = [
      "kpi3_cost_hops_scenario.png", kpi3_facts),
     ("KPI 4 — Throughput T(n) e scalabilità σ(n)",
      "kpi4_throughput_sigma.png", kpi4_facts),
-    ("KPI 5 — Latenza: backend mock vs Next Door reale",
-     "kpi5_mock_vs_ndks.png", kpi5_facts),
-    ("KPI 6 — Tasso di successo/errore per scenario (200 vs 503)",
-     "kpi6_success_rate.png", kpi6_facts),
-    ("KPI 7 — Livello di pool ρ_i nel tempo con pre-fetching",
-     "kpi7_pool_rho.png", kpi7_facts),
+    ("KPI 5 — Tasso di successo/errore per scenario (200 vs 503)",
+     "kpi5_success_rate.png", kpi5_facts),
+    ("KPI 6 — Livello di pool ρ_i nel tempo con pre-fetching",
+     "kpi6_pool_rho.png", kpi6_facts),
 ]
 
 STYLE = """

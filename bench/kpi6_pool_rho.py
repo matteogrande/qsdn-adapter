@@ -1,5 +1,5 @@
 """
-KPI 7 — Key-pool level rho_i(t) with pre-fetching that activates below threshold.
+KPI 6 — Key-pool level rho_i(t) with pre-fetching that activates below threshold.
 
 Drives a real experiment against the Milano KMS pool and samples rho_i over time:
 
@@ -54,7 +54,7 @@ def _sample() -> dict:
 def _load_worker(stop: threading.Event) -> None:
     with c.new_client() as client:
         while not stop.is_set():
-            rid = f"kpi7-{int(time.time()*1e6)}"
+            rid = f"kpi6-{int(time.time()*1e6)}"
             c.post_circuit(client, c.make_request(*SCENARIO, rid, num_keys=NUM_KEYS))
             time.sleep(0.12)
 
@@ -137,15 +137,15 @@ def plot(samples: list[dict]) -> None:
     ax.set_ylabel("Livello pool  ρ_i = stored / capacity")
     ax.set_ylim(0, 1.1)
     ax.set_xlim(0, t[-1] if t else 1)
-    ax.set_title("KPI 7 — Livello di pool ρ_i nel tempo con pre-fetching alla soglia")
+    ax.set_title("KPI 6 — Livello di pool ρ_i nel tempo con pre-fetching alla soglia")
     ax.legend(loc="lower right", ncol=1)
     fig.tight_layout()
-    style.savefig(fig, "kpi7_pool_rho.png")
+    style.savefig(fig, "kpi6_pool_rho.png")
 
 
 if __name__ == "__main__":
-    print("KPI 7 — pool level rho_i(t) with pre-fetching")
+    print("KPI 6 — pool level rho_i(t) with pre-fetching")
     samples = run()
-    c.write_csv("kpi7_pool_rho.csv", samples,
+    c.write_csv("kpi6_pool_rho.csv", samples,
                 ["t", "rho", "stored", "prefetching", "threshold"])
     plot(samples)

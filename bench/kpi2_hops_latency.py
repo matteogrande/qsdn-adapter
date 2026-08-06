@@ -2,9 +2,16 @@
 KPI 2 — Latency as a function of hop count, L(h).
 
 Sweeps many source/destination pairs, groups the measured end-to-end latency by
-the hop count the PCE actually chose (read from the audit trail), and plots
-mean ± std per hop with a linear fit. A roughly linear L(h) empirically backs
-the additive-cost premise of the routing objective function.
+the hop count the PCE actually chose (read from the audit trail), and plots the
+*median* per hop with interquartile (25th-75th percentile) whiskers and a linear
+fit. Median + IQR are used deliberately instead of mean ± std: the end-to-end
+latency has a heavy right tail (occasional container/GC/scheduler stalls push a
+few samples to 150-270 ms), and both the mean and the standard deviation are
+dominated by those rare outliers. The median is unaffected by them and the IQR
+describes the spread of the bulk of the distribution, so the per-hop points sit
+where the typical request actually lands and the whiskers no longer overlap
+across every hop. A roughly linear L(h) empirically backs the additive-cost
+premise of the routing objective function.
 """
 from __future__ import annotations
 
@@ -17,8 +24,8 @@ from style import SERIES, STATUS
 
 CITIES = ["milano", "torino", "genova", "venezia", "bologna", "parma",
           "la_spezia", "padova", "pavia", "ferrara", "verona"]
-REPS = 8            # repetitions per pair
-MAX_PAIRS = 45      # cap the sweep so a run stays quick
+REPS = 20           # repetitions per pair (more samples -> tighter percentiles)
+MAX_PAIRS = 55      # all C(11,2) pairs, so the sparse 4-hop bucket is well filled
 
 
 def run() -> list[dict]:
@@ -55,25 +62,29 @@ def plot(rows: list[dict]) -> None:
     for r in rows:
         by_hop.setdefault(r["hops"], []).append(r["e2e_ms"])
     hops = sorted(by_hop)
-    means = [stats.mean(by_hop[h]) for h in hops]
-    stds = [stats.pstdev(by_hop[h]) if len(by_hop[h]) > 1 else 0 for h in hops]
+    # Median as the central value (outlier-robust), interquartile range as the
+    # whiskers. yerr is asymmetric: lower = median-p25, upper = p75-median.
+    meds = [stats.median(by_hop[h]) for h in hops]
+    lo_err = [meds[i] - c.percentile(by_hop[h], 25) for i, h in enumerate(hops)]
+    hi_err = [c.percentile(by_hop[h], 75) - meds[i] for i, h in enumerate(hops)]
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.errorbar(hops, means, yerr=stds, fmt="o-", color=SERIES[0],
+    ax.errorbar(hops, meds, yerr=[lo_err, hi_err], fmt="o-", color=SERIES[0],
                 ecolor=style.INK["baseline"], elinewidth=1.5, capsize=4,
-                markersize=8, linewidth=2, label="Latenza media misurata L(h)",
+                markersize=8, linewidth=2,
+                label="Latenza mediana misurata L(h)  (baffi = IQR)",
                 zorder=3)
-    for h, m in zip(hops, means):
+    for h, m in zip(hops, meds):
         ax.annotate(f"{m:.1f} ms", (h, m), textcoords="offset points",
                     xytext=(0, 12), ha="center", fontsize=9,
                     color=style.INK["primary"])
 
-    # linear fit L(h) = a + b·h to show additivity
+    # linear fit L(h) = a + b·h on the medians to show additivity
     if len(hops) >= 2:
         n = len(hops)
-        sx, sy = sum(hops), sum(means)
+        sx, sy = sum(hops), sum(meds)
         sxx = sum(h * h for h in hops)
-        sxy = sum(h * m for h, m in zip(hops, means))
+        sxy = sum(h * m for h, m in zip(hops, meds))
         b = (n * sxy - sx * sy) / (n * sxx - sx * sx)
         a = (sy - b * sx) / n
         xs = [min(hops), max(hops)]

@@ -1,5 +1,5 @@
 """
-KPI 6 — Success/error rate per scenario (HTTP 200 vs 503).
+KPI 5 — Success/error rate per scenario (HTTP 200 vs 503).
 
 Exercises admissible and non-admissible scenarios and measures the fraction of
 200 (PROVISIONED) vs 503 (REJECTED) responses. Non-admissible cases are induced
@@ -30,7 +30,7 @@ def _set_pool(city: str, **fields) -> None:
 def _batch(client, src, dst, reps) -> tuple[int, int]:
     ok = err = 0
     for i in range(reps):
-        rid = f"kpi6-{src}-{dst}-{int(time.time()*1000)}-{i}"
+        rid = f"kpi5-{src}-{dst}-{int(time.time()*1000)}-{i}"
         status, _, _ = c.post_circuit(client, c.make_request(src, dst, rid))
         if status == 200:
             ok += 1
@@ -97,15 +97,15 @@ def plot(rows: list[dict]) -> None:
 
     ax.set_ylabel("Quota risposte (%)")
     ax.set_ylim(0, 100)
-    ax.set_title("KPI 6 — Tasso di successo/errore per scenario (200 vs 503)")
+    ax.set_title("KPI 5 — Tasso di successo/errore per scenario (200 vs 503)")
     ax.legend(loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.28))
     fig.tight_layout()
-    style.savefig(fig, "kpi6_success_rate.png")
+    style.savefig(fig, "kpi5_success_rate.png")
 
 
 if __name__ == "__main__":
-    print("KPI 6 — success/error rate (200 vs 503)")
+    print("KPI 5 — success/error rate (200 vs 503)")
     rows = run()
-    c.write_csv("kpi6_success_rate.csv", rows,
+    c.write_csv("kpi5_success_rate.csv", rows,
                 ["scenario", "ok_200", "err_503", "success_rate"])
     plot(rows)

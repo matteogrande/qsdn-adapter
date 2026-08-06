@@ -97,7 +97,7 @@ def plot(rows: list[dict]) -> None:
     ax.set_xticks(x, labels)
     ax.set_ylabel("Hop del percorso")
     ax.set_ylim(0, max(flt + nom) + 1)
-    ax.set_title("KPI 3 — Hop del percorso per scenario: nominale vs rerouting")
+    ax.set_title("KPI 3 — Hop del percorso di key relay: nominale vs ricalcolo dopo guasto")
     ax.legend(loc="upper left")
     fig.tight_layout()
     style.savefig(fig, "kpi3_cost_hops_scenario.png")

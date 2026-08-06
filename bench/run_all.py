@@ -1,9 +1,6 @@
 """
-Run the mock-stack KPI suite end to end (KPI 1, 2, 3, 4, 6, 7) and emit all
+Run the mock-stack KPI suite end to end (KPI 1, 2, 3, 4, 5, 6) and emit all
 CSVs + PNGs into bench/results/.
-
-KPI 5 (mock vs Next Door) is intentionally separate: run kpi5_mock_vs_ndks.py
-once here (mock) and once under the ndks profile to build the comparison.
 
 Prereq: the mock stack must be up (`docker compose up -d --build`).
 """
@@ -21,9 +18,8 @@ MODULES = [
     "kpi2_hops_latency",
     "kpi3_cost_hops_scenario",
     "kpi4_throughput_sigma",
-    "kpi6_success_rate",
-    "kpi7_pool_rho",
-    "kpi5_mock_vs_ndks",   # records current backend (mock here)
+    "kpi5_success_rate",
+    "kpi6_pool_rho",
 ]
 
 
@@ -53,17 +49,10 @@ def main() -> int:
         print(f"\n=== {name} ===")
         mod = importlib.import_module(name)
         try:
-            if name == "kpi5_mock_vs_ndks":
-                backend, rows = mod.run()
-                if rows:
-                    c.write_csv(f"kpi5_{backend}.csv", rows,
-                                ["backend", "e2e_ms", "kom_ms", "http_ms"])
-                mod.plot()
-            else:
-                rows = mod.run()
-                # each module knows its own CSV columns via its __main__; reuse:
-                mod.plot(rows) if hasattr(mod, "plot") else None
-                _persist(name, mod, rows)
+            rows = mod.run()
+            # each module knows its own CSV columns via its __main__; reuse:
+            mod.plot(rows) if hasattr(mod, "plot") else None
+            _persist(name, mod, rows)
         except Exception as exc:  # noqa: BLE001
             print(f"  !! {name} failed: {exc}")
     print(f"\nDone. Charts + CSVs in {c.RESULTS_DIR}")
@@ -86,9 +75,9 @@ def _persist(name: str, mod, rows) -> None:
         "kpi4_throughput_sigma": ("kpi4_throughput_sigma.csv",
                                   ["n", "throughput", "sigma", "ok", "total",
                                    "elapsed_s"]),
-        "kpi6_success_rate": ("kpi6_success_rate.csv",
+        "kpi5_success_rate": ("kpi5_success_rate.csv",
                               ["scenario", "ok_200", "err_503", "success_rate"]),
-        "kpi7_pool_rho": ("kpi7_pool_rho.csv",
+        "kpi6_pool_rho": ("kpi6_pool_rho.csv",
                           ["t", "rho", "stored", "prefetching", "threshold"]),
     }
     if name in writers:

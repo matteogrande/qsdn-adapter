@@ -1,10 +1,20 @@
 """
 KPI 4 — Throughput T(n) and scalability index sigma(n) under concurrent load.
 
+Here n is the *degree of concurrency* — the number of virtual-circuit requests
+kept in flight simultaneously — NOT the number of nodes in the network. With
+simulated KMS a node-count sweep would say little; capacity under concurrent
+load is a real property of the software, so that is what this KPI measures.
+
 For each concurrency level n, fires a fixed batch of circuits with n workers in
-flight and measures throughput T(n) = completed / elapsed. The scalability index
-is sigma(n) = T(n)/T(2) · 2/n  (1.0 = perfect scaling relative to the n=2
-baseline). Two panels, one measure each (never a dual axis).
+flight and measures throughput T(n) = completed / elapsed. Each level is run
+REPEATS times and the *median* throughput is kept, so a single noisy trial can no
+longer put a false dent in the plateau. The scalability index is
+sigma(n) = T(n)/T(2) · 2/n  (1.0 = perfect scaling relative to the n=2 baseline);
+it falls toward zero once the system saturates, by construction (T(n) flattens
+while the formula keeps dividing by n) — the informative quantities are the knee
+and the plateau, not sigma's tail. Two panels, one measure each (never a dual
+axis).
 """
 from __future__ import annotations
 
@@ -19,6 +29,7 @@ from style import SERIES, STATUS
 
 LEVELS = [2, 4, 8, 16, 32, 64]
 REQUESTS_PER_LEVEL = 240
+REPEATS = 3                       # trials per level; keep the median (kills noise)
 SCENARIO = ("Torino", "Genova")   # short path: stress the stack, not routing
 
 
@@ -28,7 +39,8 @@ def _one(client: httpx.Client, i: int) -> int:
     return status
 
 
-def measure_level(n: int) -> dict:
+def _trial(n: int) -> dict:
+    """One measurement of concurrency level n -> throughput + counters."""
     limits = httpx.Limits(max_connections=n + 8, max_keepalive_connections=n + 8)
     with httpx.Client(timeout=30.0, limits=limits) as client:
         # small warmup so connections are established before timing
@@ -40,10 +52,19 @@ def measure_level(n: int) -> dict:
         elapsed = time.perf_counter() - t0
     ok = sum(1 for s in results if s == 200)
     tput = REQUESTS_PER_LEVEL / elapsed
-    print(f"  n={n:>3}: {tput:7.1f} req/s  ({ok}/{REQUESTS_PER_LEVEL} ok, "
-          f"{elapsed:.2f}s)")
     return {"n": n, "throughput": round(tput, 2), "ok": ok,
             "total": REQUESTS_PER_LEVEL, "elapsed_s": round(elapsed, 3)}
+
+
+def measure_level(n: int) -> dict:
+    """Run REPEATS trials at level n and return the median-throughput one."""
+    trials = sorted((_trial(n) for _ in range(REPEATS)),
+                    key=lambda t: t["throughput"])
+    med = trials[len(trials) // 2]            # REPEATS is odd -> true median trial
+    tputs = ", ".join(f"{t['throughput']:.1f}" for t in trials)
+    print(f"  n={n:>3}: {med['throughput']:7.1f} req/s  median of {REPEATS} "
+          f"[{tputs}]  ({med['ok']}/{med['total']} ok)")
+    return med
 
 
 def run() -> list[dict]:
