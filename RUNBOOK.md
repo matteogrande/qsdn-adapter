@@ -52,7 +52,11 @@ docker ps -a          # non deve mostrare container qsdn-/kme-/onos/mininet
 
 ```bash
 docker compose up -d --build
-docker compose ps        # devi vedere 22 servizi "Up"
+docker compose ps        
+
+docker compose build 
+docker compose up -d
+# devi vedere 22 servizi "Up"
 ```
 
 I 22 servizi: 6 microservizi dell'adapter (gateway, identity, topology, pce, kom,

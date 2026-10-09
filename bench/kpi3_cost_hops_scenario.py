@@ -18,12 +18,12 @@ FAULT = ("milano", "parma")
 # fault forces a reroute (verified against the topology):
 #   Milano→Venezia : milano-parma-padova-venezia            (3 hop)
 #   Milano→Bologna : milano-parma-bologna                   (2 hop)
-#   Milano→Padova  : milano-parma-padova                    (2 hop)
+#   Milano→Verona  : milano-parma-padova-verona             (3 hop)
 #   Torino→Bologna : torino-MILANO-PARMA-bologna            (3 hop)  <- passa per Milano-Parma
 SCENARIOS = [
     ("Milano", "Venezia"),
     ("Milano", "Bologna"),
-    ("Milano", "Padova"),
+    ("Milano", "Verona"),
     ("Torino", "Bologna"),
 ]
 

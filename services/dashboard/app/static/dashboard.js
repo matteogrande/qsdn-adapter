@@ -552,11 +552,11 @@
       const c = state.activeCircuit;
       const stateLabel = c.state === "ACTIVE_REROUTED" ? "ACTIVE · REROUTED" : c.state === "DEGRADED" ? "DEGRADED" : "ACTIVE";
       const stateColor = c.state === "DEGRADED" ? linkPaint.down : c.state === "ACTIVE_REROUTED" ? linkPaint.path : linkPaint.up;
-      svg.push(`<g transform="translate(918, 20)">
-        <rect x="0" y="0" width="262" height="70" rx="14" fill="rgba(8,18,30,0.92)" stroke="rgba(106,215,255,0.3)" stroke-width="1.5" />
-        <text class="circuit-badge-title" x="16" y="22">VIRTUAL CIRCUIT</text>
-        <text class="circuit-badge-id" x="16" y="45">${escapeHtml(c.circuitId)}</text>
-        <text class="circuit-badge-state" x="16" y="61" fill="${stateColor}">${escapeHtml(stateLabel)}</text>
+      svg.push(`<g transform="translate(918, 4)">
+        <rect x="0" y="0" width="262" height="62" rx="12" fill="rgba(8,18,30,0.92)" stroke="rgba(106,215,255,0.3)" stroke-width="1.5" />
+        <text class="circuit-badge-title" x="16" y="19">VIRTUAL CIRCUIT</text>
+        <text class="circuit-badge-id" x="16" y="40">${escapeHtml(c.circuitId)}</text>
+        <text class="circuit-badge-state" x="16" y="55" fill="${stateColor}">${escapeHtml(stateLabel)}</text>
       </g>`);
     }
 
